@@ -1,32 +1,27 @@
 import json
 import os
+import re
 import requests
 
-# Fallback URLs covering both main and dev branches
-URLS = [
-    "https://raw.githubusercontent.com/SimplifyJobs/Summer2027-Internships/main/listings.json",
-    "https://raw.githubusercontent.com/SimplifyJobs/Summer2027-Internships/dev/listings.json"
-]
-
+README_URL = "https://raw.githubusercontent.com/SimplifyJobs/Summer2027-Internships/main/README.md"
 CACHE_FILE = "seen_ids.json"
 WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL")
 
 TARGET_KEYWORDS = ["software", "engineer", "quant", "developer", "data", "ai", "machine learning"]
 
-def send_discord_notification(job):
-    locations = ", ".join(job.get("locations", [])) or "Remote / Not Listed"
+def send_discord_notification(company, role, location, link):
     payload = {
         "username": "Simplify Internship Tracker",
         "embeds": [
             {
-                "title": f"🚨 New Role: {job.get('company_name')} - {job.get('title')}",
-                "url": job.get("url"),
+                "title": f"🚨 New Role: {company} - {role}",
+                "url": link,
                 "color": 3447003,
                 "fields": [
-                    {"name": "Company", "value": job.get("company_name", "N/A"), "inline": True},
-                    {"name": "Location", "value": locations, "inline": True},
-                    {"name": "Terms", "value": ", ".join(job.get("terms", [])), "inline": True},
-                    {"name": "Application Link", "value": f"[Apply Here]({job.get('url')})", "inline": False}
+                    {"name": "Company", "value": company, "inline": True},
+                    {"name": "Role", "value": role, "inline": True},
+                    {"name": "Location", "value": location or "Not Listed", "inline": True},
+                    {"name": "Application Link", "value": f"[Apply Here]({link})", "inline": False}
                 ],
                 "footer": {"text": "SimplifyJobs Tracker Alert"}
             }
@@ -34,6 +29,39 @@ def send_discord_notification(job):
     }
     if WEBHOOK_URL:
         requests.post(WEBHOOK_URL, json=payload)
+
+def parse_markdown_table(md_text):
+    jobs = []
+    row_pattern = re.compile(r"^\|(.+?)\|(.+?)\|(.+?)\|(.+?)\|", re.MULTILINE)
+    link_pattern = re.compile(r"\[.*?\]\((https?://[^\)]+)\)")
+
+    for match in row_pattern.finditer(md_text):
+        company_raw, role_raw, loc_raw, link_col = match.groups()
+
+        company = re.sub(r"\[.*?\]\(.*?\)|\*|_|`", "", company_raw).strip()
+        role = re.sub(r"\[.*?\]\(.*?\)|\*|_|`", "", role_raw).strip()
+        location = re.sub(r"<br\s*/?>", ", ", loc_raw).strip()
+
+        if "Company" in company or "---" in company or not company:
+            continue
+
+        links = link_pattern.findall(link_col)
+        job_url = links[0] if links else ""
+        if not job_url:
+            raw_url = re.search(r"https?://[^\s\|]+", link_col)
+            job_url = raw_url.group(0) if raw_url else ""
+
+        job_id = f"{company.lower()}-{role.lower()}"
+
+        if job_id and job_url:
+            jobs.append({
+                "id": job_id,
+                "company": company,
+                "role": role,
+                "location": location,
+                "url": job_url
+            })
+    return jobs
 
 def main():
     if os.path.exists(CACHE_FILE):
@@ -45,39 +73,30 @@ def main():
     else:
         seen_ids = set()
 
-    listings = None
-    for url in URLS:
-        response = requests.get(url)
-        if response.status_code == 200:
-            try:
-                listings = response.json()
-                print(f"Successfully fetched listings from {url}")
-                break
-            except Exception:
-                continue
-
-    if listings is None:
-        print("Failed to fetch listings from all endpoints. Verify repository branch and file structure.")
+    response = requests.get(README_URL)
+    if response.status_code != 200:
+        print(f"Failed to fetch README: {response.status_code}")
         return
+
+    jobs = parse_markdown_table(response.text)
+    print(f"Parsed {len(jobs)} total jobs from Simplify README.")
 
     new_seen_ids = set(seen_ids)
     new_jobs_found = 0
     first_run = len(seen_ids) == 0
 
-    for job in listings:
-        job_id = job.get("id")
-        title = job.get("title", "").lower()
-        is_active = job.get("active", True)
-        is_visible = job.get("is_visible", True)
+    for job in jobs:
+        job_id = job["id"]
+        role_lower = job["role"].lower()
 
-        if job_id and job_id not in seen_ids and is_active and is_visible:
-            if not first_run and any(kw in title for kw in TARGET_KEYWORDS):
-                send_discord_notification(job)
+        if job_id not in seen_ids:
+            if not first_run and any(kw in role_lower for kw in TARGET_KEYWORDS):
+                send_discord_notification(job["company"], job["role"], job["location"], job["url"])
                 new_jobs_found += 1
             new_seen_ids.add(job_id)
 
     if first_run:
-        print(f"Initial run: cached {len(new_seen_ids)} existing postings without alerting.")
+        print(f"Initial run: cached {len(new_seen_ids)} existing postings without spamming Discord.")
     else:
         print(f"Dispatched {new_jobs_found} new alerts.")
 
