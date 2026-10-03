@@ -11,7 +11,7 @@ URLS = [
 CACHE_FILE = "seen_ids.json"
 WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL")
 
-TARGET_KEYWORDS = ["software", "engineer", "quant", "developer", "data", "ai", "machine learning", "intern"]
+TARGET_KEYWORDS = ["software", "engineer", "quant", "developer", "data", "ai", "machine learning"]
 
 def send_discord_notification(job):
     locations = ", ".join(job.get("locations", [])) or "Remote / Not Listed"
