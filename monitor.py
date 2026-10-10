@@ -1,7 +1,7 @@
 import json
 import os
 import re
-import requests
+import request
 
 README_URL = "https://raw.githubusercontent.com/SimplifyJobs/Summer2027-Internships/main/README.md"
 CACHE_FILE = "seen_ids.json"
