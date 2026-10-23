@@ -10,7 +10,14 @@ TARGET_CATEGORIES = {"Software", "Software Engineering", "AI/ML/Data", "Data Sci
 TARGET_KEYWORDS = ["software", "engineer", "quant", "developer", "data", "ai", "machine learning"]
 
 
-def send_discord_notification(company, role, location, link):
+def send_discord_notification(company, role, location, link, posted_time):
+    time_str = "Not Listed"
+    if posted_time:
+        if isinstance(posted_time, (int, float)):
+            time_str = f"<t:{int(posted_time)}:f>"
+        else:
+            time_str = str(posted_time)
+
     payload = {
         "username": "Simplify Internship Tracker",
         "embeds": [
@@ -19,18 +26,18 @@ def send_discord_notification(company, role, location, link):
                 "url": link,
                 "color": 3447003,
                 "fields": [
-                    {"name": "Company", "value": company, "inline": True},
-                    {"name": "Role", "value": role, "inline": True},
-                    {"name": "Location", "value": location or "Not Listed", "inline": True},
-                    {"name": "Application Link", "value": f"[Apply Here]({link})", "inline": False},
+                    {"name": "🏢 Company", "value": company, "inline": True},
+                    {"name": "💼 Role", "value": role, "inline": True},
+                    {"name": "📍 Location", "value": location or "Not Listed", "inline": True},
+                    {"name": "🕒 Date Posted", "value": time_str, "inline": True},
+                    {"name": "🔗 Application Link", "value": f"[:link: Apply Here]({link})", "inline": False},
                 ],
-                "footer": {"text": "SimplifyJobs Tracker Alert"},
+                "footer": {"text": "SimplifyJobs Tracker Alert 🚀"},
             }
         ],
     }
     if WEBHOOK_URL:
         requests.post(WEBHOOK_URL, json=payload, timeout=15)
-
 
 def matches(job):
     title = (job.get("title") or "").lower()
