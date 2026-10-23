@@ -1,19 +1,19 @@
-# DISCORD_WEBHOOK_URL
-Links Discord to Simplify GitHub repository, to notify you of the most recent positions
+# 🚀 SimplifyJobs Discord Tracker
 
+A Python-based monitoring tool that tracks the SimplifyJobs Summer 2027 Internships list and automatically sends formatted Discord alerts whenever new Software Engineering, Data Science, or AI/ML roles are posted. 
 
-#Key Features
+### ✨ Key Features
+* 🤖 **Automated Tracking:** Fetches live data directly from the Simplify raw JSON feed.
+* 🎯 **Smart Filtering:** Only alerts you to relevant technical roles using customizable keyword and category filters.
+* 💬 **Rich Discord Embeds:** Delivers clean notifications featuring the company name, role, location, posting time, and a direct application link.
+* 🛡️ **Duplicate Prevention:** Uses a local cache (`seen_ids.json`) to remember previously processed listings and prevent spamming your Discord channel.
 
-Automated Tracking: Fetches live data directly from the Simplify raw JSON feed.
+### 🛠️ Prerequisites
+* 🐍 Python 3.x
+* 📦 `requests` library
+* 👾 A Discord server with Webhook integration enabled
 
-Smart Filtering: Only alerts you to relevant technical roles using customizable keyword and category filters.
-
-Rich Discord Embeds: Delivers clean notifications featuring the company name, role, location, posting time, and a direct application link.
-
-Duplicate Prevention: Uses a local cache (seen_ids.json) to remember previously processed listings and prevent spamming your Discord channel.
-
-
-#Installation & Setup
+### 📥 Installation & Setup
 
 Clone the repository:
 
