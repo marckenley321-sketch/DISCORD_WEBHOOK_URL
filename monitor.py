@@ -65,11 +65,23 @@ def main():
         company = (item.get("company_name") or "").strip()
         title = (item.get("title") or "").strip()
         url = (item.get("url") or "").strip()
+        
+        # Extract the post time from Simplify's JSON payload
+        posted_time = item.get("date_posted") or item.get("date_updated") or item.get("date")
+
         if not company or not title:
             continue
         job_id = item.get("id") or f"{company.lower()}|{title.lower()}"
         location = ", ".join(item.get("locations") or [])
-        jobs.append({"id": job_id, "company": company, "role": title, "location": location, "url": url, "job": item})
+        jobs.append({
+            "id": job_id, 
+            "company": company, 
+            "role": title, 
+            "location": location, 
+            "url": url, 
+            "job": item,
+            "posted_time": posted_time
+        })
 
     print(f"Parsed {len(jobs)} active listings from Simplify feed.")
 
