@@ -1,6 +1,6 @@
 # 🚀 SimplifyJobs Discord Tracker
 
-A Python-based monitoring tool that tracks the SimplifyJobs Summer 2027 Internships list and automatically sends formatted Discord alerts whenever new Software Engineering, Data Science, or AI/ML roles are posted. 
+A Python-based monitoring tool that tracks the SimplifyJobs Summer Internships list and automatically sends formatted Discord alerts whenever new Software Engineering, Data Science, or AI/ML roles are posted. 
 
 ### ✨ Key Features
 * 🤖 **Automated Tracking:** Fetches live data directly from the Simplify raw JSON feed.
