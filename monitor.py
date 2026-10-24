@@ -100,7 +100,7 @@ def main():
         job_id = job["id"]
         if job_id not in seen_ids:
             if not first_run and matches(job["job"]):
-                send_discord_notification(job["company"], job["role"], job["location"], job["url"])
+                send_discord_notification(job["company"], job["role"], job["location"], job["url"], job["posted_time"])
                 new_jobs_found += 1
             new_seen_ids.add(job_id)
 
