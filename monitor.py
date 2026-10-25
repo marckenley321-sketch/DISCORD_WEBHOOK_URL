@@ -42,7 +42,7 @@ SOURCES = [
     },
 ]
 
-# ---------------- Normalization & Deduplication ---------------- #
+# ----------------  ---------------- #
 
 COMPANY_SUFFIXES = [
     r"\binc\b", r"\bllc\b", r"\bcorp\b", r"\bcorporation\b", 
@@ -85,7 +85,7 @@ def generate_fingerprint_id(company: str, role: str) -> str:
     raw_key = f"fp:{comp_clean}:{role_clean}"
     return hashlib.md5(raw_key.encode("utf-8")).hexdigest()
 
-# ---------------- Discord Dispatcher ---------------- #
+# ----------------  ---------------- #
 
 def send_discord_notification(source, company, role, location, link, posted_time):
     time_str = "Not Listed"
@@ -121,7 +121,7 @@ def send_discord_notification(source, company, role, location, link, posted_time
         except Exception as e:
             print(f"Failed to post to Discord: {e}")
 
-# ---------------- Parsers ---------------- #
+# ----------------  ---------------- #
 
 def clean_text(text: str) -> str:
     text = re.sub(r"<[^>]+>", "", text)
@@ -205,7 +205,7 @@ def parse_markdown_table(content, source_name):
         })
     return jobs
 
-# ---------------- Main Controller ---------------- #
+# ----------------  ---------------- #
 
 def main():
     seen_ids = set()
