@@ -91,7 +91,11 @@ def send_discord_notification(source, company, role, location, link, posted_time
     time_str = "Not Listed"
     if posted_time:
         if isinstance(posted_time, (int, float)):
-            time_str = f"<t:{int(posted_time)}:f>"
+            try:
+                dt = datetime.fromtimestamp(posted_time)
+                time_str = dt.strftime("%B %d, %Y - %I:%M%p")
+            except Exception:
+                time_str = str(posted_time)
         else:
             time_str = str(posted_time)
 
