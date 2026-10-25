@@ -3,10 +3,10 @@ import json
 import os
 import re
 from difflib import SequenceMatcher
-from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
+from urllib.parse import urlparse
 import requests
 
-CACHE_FILE = "seen_jobs.json"
+CACHE_FILE = "seen_ids.json"
 WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL")
 
 TARGET_CATEGORIES = {
@@ -15,7 +15,7 @@ TARGET_CATEGORIES = {
 }
 
 TARGET_KEYWORDS = [
-    "software", "engineer", "quant", "developer", "design", "technology",
+    "software", "engineer", "quant", "developer", "technology", 
     "data", "ai", "machine learning", "security", "support", "systems", "development"
 ]
 
@@ -42,7 +42,7 @@ SOURCES = [
     },
 ]
 
-# ----------------- #
+# ---------------- Normalization & Deduplication ---------------- #
 
 COMPANY_SUFFIXES = [
     r"\binc\b", r"\bllc\b", r"\bcorp\b", r"\bcorporation\b", 
@@ -69,7 +69,6 @@ def clean_role_name(role: str) -> str:
     cleaned = re.sub(r"<[^>]+>", "", cleaned)
     cleaned = re.sub(r"\[([^\]]+)\]\([^\)]+\)", r"\1", cleaned)
     
-    # Common abbreviation replacements
     cleaned = re.sub(r"\bswe\b", "software engineer", cleaned)
     cleaned = re.sub(r"\bml\b", "machine learning", cleaned)
     cleaned = re.sub(r"\bds\b", "data science", cleaned)
@@ -79,46 +78,14 @@ def clean_role_name(role: str) -> str:
         cleaned = re.sub(noise, "", cleaned)
     return re.sub(r"[^a-z0-9]", "", cleaned)
 
-def clean_url(raw_url: str) -> str:
-    """Strips query parameters like tracking IDs (utm_*, ref, etc.)."""
-    try:
-        parsed = urlparse(raw_url.strip())
-        # Drop UTM, tracking query strings, and trailing slashes
-        clean_path = parsed.path.rstrip("/")
-        return f"{parsed.netloc}{clean_path}".lower()
-    except Exception:
-        return raw_url.strip().lower()
+def generate_fingerprint_id(company: str, role: str) -> str:
+    """Generates a stable hash based on normalized company and role name."""
+    comp_clean = clean_company_name(company)
+    role_clean = clean_role_name(role)
+    raw_key = f"fp:{comp_clean}:{role_clean}"
+    return hashlib.md5(raw_key.encode("utf-8")).hexdigest()
 
-def is_duplicate(new_job, seen_records):
-    """
-    Checks if a job is already present using:
-    1. Direct URL match (after stripping query params)
-    2. Normalized Company + Normalized Role fingerprint
-    3. High-confidence fuzzy match for the same company
-    """
-    new_comp = new_job["norm_company"]
-    new_role = new_job["norm_role"]
-    new_url = new_job["clean_url"]
-
-    for record in seen_records:
-        # Check 1: Matching application URL
-        if new_url and record.get("clean_url") and new_url == record["clean_url"]:
-            return True, f"Matched existing application URL: {record['clean_url']}"
-
-        # Check 2: Exact match on normalized Company + normalized Role
-        if new_comp and new_comp == record.get("norm_company"):
-            if new_role == record.get("norm_role"):
-                return True, f"Matched company ({new_comp}) and normalized role ({new_role})"
-
-            # Check 3: Fuzzy role match for the same company (>= 85% similarity)
-            if new_role and record.get("norm_role"):
-                similarity = SequenceMatcher(None, new_role, record["norm_role"]).ratio()
-                if similarity >= 0.85:
-                    return True, f"Fuzzy matched ({int(similarity*100)}%) with {record['raw_role']}"
-
-    return False, ""
-
-# ---------------- #
+# ---------------- Discord Dispatcher ---------------- #
 
 def send_discord_notification(source, company, role, location, link, posted_time):
     time_str = "Not Listed"
@@ -129,7 +96,7 @@ def send_discord_notification(source, company, role, location, link, posted_time
             time_str = str(posted_time)
 
     payload = {
-        "username": "Internship Aggregator",
+        "username": "Universal Internship Tracker",
         "embeds": [
             {
                 "title": f"🚨 New Role: {company} - {role}",
@@ -140,10 +107,10 @@ def send_discord_notification(source, company, role, location, link, posted_time
                     {"name": "💼 Role", "value": role, "inline": True},
                     {"name": "📍 Location", "value": location or "Not Listed", "inline": True},
                     {"name": "🕒 Date Posted", "value": time_str, "inline": True},
-                    {"name": "📡 Discovered Via", "value": f"`{source}`", "inline": True},
+                    {"name": "📡 Source", "value": f"`{source}`", "inline": True},
                     {"name": "🔗 Application Link", "value": f"[:link: Apply Here]({link})", "inline": False},
                 ],
-                "footer": {"text": "Deduplicated Multi-Repo Alert 🚀"},
+                "footer": {"text": "Multi-Repo Deduplicated Alert 🚀"},
             }
         ],
     }
@@ -152,9 +119,9 @@ def send_discord_notification(source, company, role, location, link, posted_time
             res = requests.post(WEBHOOK_URL, json=payload, timeout=15)
             res.raise_for_status()
         except Exception as e:
-            print(f"Failed to post to Discord webhook: {e}")
+            print(f"Failed to post to Discord: {e}")
 
-# ---------------- #
+# ---------------- Parsers ---------------- #
 
 def clean_text(text: str) -> str:
     text = re.sub(r"<[^>]+>", "", text)
@@ -179,6 +146,7 @@ def parse_simplify_json(data, source_name):
         category = item.get("category") or ""
         posted_time = item.get("date_posted") or item.get("date_updated") or item.get("date")
         location = ", ".join(item.get("locations") or [])
+        simplify_uuid = (item.get("id") or "").strip()
 
         if not raw_company or not raw_role or not url:
             continue
@@ -187,13 +155,12 @@ def parse_simplify_json(data, source_name):
 
         jobs.append({
             "source": source_name,
-            "raw_company": raw_company,
-            "raw_role": raw_role,
-            "norm_company": clean_company_name(raw_company),
-            "norm_role": clean_role_name(raw_role),
+            "raw_id": simplify_uuid,
+            "fingerprint": generate_fingerprint_id(raw_company, raw_role),
+            "company": raw_company,
+            "role": raw_role,
             "location": location,
             "url": url,
-            "clean_url": clean_url(url),
             "posted_time": posted_time,
         })
     return jobs
@@ -228,27 +195,26 @@ def parse_markdown_table(content, source_name):
 
         jobs.append({
             "source": source_name,
-            "raw_company": raw_company,
-            "raw_role": raw_role,
-            "norm_company": clean_company_name(raw_company),
-            "norm_role": clean_role_name(raw_role),
+            "raw_id": None,
+            "fingerprint": generate_fingerprint_id(raw_company, raw_role),
+            "company": raw_company,
+            "role": raw_role,
             "location": location,
             "url": url,
-            "clean_url": clean_url(url),
             "posted_time": date_posted,
         })
     return jobs
 
-# ---------------- #
+# ---------------- Main Controller ---------------- #
 
 def main():
-    seen_records = []
+    seen_ids = set()
     if os.path.exists(CACHE_FILE):
         with open(CACHE_FILE, "r") as f:
             try:
-                seen_records = json.load(f)
+                seen_ids = set(json.load(f))
             except Exception:
-                seen_records = []
+                seen_ids = set()
 
     all_scraped_jobs = []
 
@@ -270,39 +236,55 @@ def main():
         except Exception as e:
             print(f"Failed to fetch {source['name']}: {e}")
 
-    first_run = len(seen_records) == 0
+    # First run check: if seen_ids is completely empty
+    first_run = len(seen_ids) == 0
+    new_seen_ids = set(seen_ids)
     new_jobs_found = 0
 
+    # Build an in-memory set of fingerprints seen across this specific run
+    current_batch_fingerprints = set()
+
     for job in all_scraped_jobs:
-        duplicate, reason = is_duplicate(job, seen_records)
-        if not duplicate:
+        fp = job["fingerprint"]
+        raw_id = job["raw_id"]
+
+        # Check if matched against legacy Simplify UUIDs or cross-repo fingerprints
+        is_already_seen = (
+            (raw_id and raw_id in seen_ids) or 
+            (fp in seen_ids) or 
+            (fp in current_batch_fingerprints)
+        )
+
+        if not is_already_seen:
             if not first_run:
                 send_discord_notification(
                     source=job["source"],
-                    company=job["raw_company"],
-                    role=job["raw_role"],
+                    company=job["company"],
+                    role=job["role"],
                     location=job["location"],
                     link=job["url"],
                     posted_time=job["posted_time"],
                 )
                 new_jobs_found += 1
             
-            # Store structured identity record
-            seen_records.append({
-                "norm_company": job["norm_company"],
-                "norm_role": job["norm_role"],
-                "raw_company": job["raw_company"],
-                "raw_role": job["raw_role"],
-                "clean_url": job["clean_url"],
-            })
+            # Register for deduplication in both current run and persistent cache
+            current_batch_fingerprints.add(fp)
+            new_seen_ids.add(fp)
+            if raw_id:
+                new_seen_ids.add(raw_id)
+        else:
+            # Backfill the fingerprint for Simplify listings that previously only had a UUID
+            new_seen_ids.add(fp)
+            if raw_id:
+                new_seen_ids.add(raw_id)
 
     if first_run:
-        print(f"Initial run completed: {len(seen_records)} jobs indexed across all 4 repos (Discord quiet mode).")
+        print(f"Initial run completed: cached {len(new_seen_ids)} keys.")
     else:
-        print(f"Run completed: {new_jobs_found} unique new roles notified.")
+        print(f"Run completed: Dispatched {new_jobs_found} unique new alerts.")
 
     with open(CACHE_FILE, "w") as f:
-        json.dump(seen_records, f, indent=2)
+        json.dump(sorted(new_seen_ids), f, indent=2)
 
 if __name__ == "__main__":
     main()
