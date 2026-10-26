@@ -2,7 +2,7 @@ import hashlib
 import json
 import os
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from difflib import SequenceMatcher
 from urllib.parse import urlparse
 import requests
@@ -80,26 +80,63 @@ def clean_role_name(role: str) -> str:
     return re.sub(r"[^a-z0-9]", "", cleaned)
 
 def generate_fingerprint_id(company: str, role: str) -> str:
-    """Generates a stable hash based on normalized company and role name."""
     comp_clean = clean_company_name(company)
     role_clean = clean_role_name(role)
     raw_key = f"fp:{comp_clean}:{role_clean}"
     return hashlib.md5(raw_key.encode("utf-8")).hexdigest()
 
+# ---------------- Time Parsing ---------------- #
+
+def parse_and_format_time(posted_time):
+    """Converts strings like '2d' or Unix stamps to 'October 25, 2026 - 12:02PM'"""
+    now = datetime.now()
+    
+    if isinstance(posted_time, (int, float)):
+        try:
+            dt = datetime.fromtimestamp(posted_time)
+            return dt.strftime("%B %d, %Y - %I:%M%p").replace(" 0", " ")
+        except Exception:
+            pass
+
+    if isinstance(posted_time, str):
+        pt_clean = posted_time.strip().lower()
+        
+        # Match markdown relative times (e.g. "2d", "3h", "1w")
+        rel_match = re.search(r'(\d+)\s*([hdwy])', pt_clean)
+        if rel_match:
+            val = int(rel_match.group(1))
+            unit = rel_match.group(2)
+            if unit == 'h': delta = timedelta(hours=val)
+            elif unit == 'd': delta = timedelta(days=val)
+            elif unit == 'w': delta = timedelta(weeks=val)
+            elif unit == 'y': delta = timedelta(days=365*val)
+            else: delta = timedelta(0)
+            
+            dt = now - delta
+            return dt.strftime("%B %d, %Y - %I:%M%p").replace(" 0", " ")
+            
+        if "yesterday" in pt_clean:
+            dt = now - timedelta(days=1)
+            return dt.strftime("%B %d, %Y - %I:%M%p").replace(" 0", " ")
+            
+        if "today" in pt_clean:
+            return now.strftime("%B %d, %Y - %I:%M%p").replace(" 0", " ")
+
+        # Attempt to parse short dates like "Oct 25"
+        try:
+            dt = datetime.strptime(pt_clean, "%b %d")
+            dt = dt.replace(year=now.year, hour=now.hour, minute=now.minute)
+            return dt.strftime("%B %d, %Y - %I:%M%p").replace(" 0", " ")
+        except ValueError:
+            pass
+
+    # If it is missing or unparseable, fall back to the time it was discovered (now)
+    return now.strftime("%B %d, %Y - %I:%M%p").replace(" 0", " ")
+
 # ---------------- Discord Dispatcher ---------------- #
 
 def send_discord_notification(source, company, role, location, link, posted_time):
-    time_str = "Not Listed"
-    if posted_time:
-        if isinstance(posted_time, (int, float)):
-            try:
-                # Converts timestamp to format: "October 25, 2026 - 12:02PM"
-                dt = datetime.fromtimestamp(posted_time)
-                time_str = dt.strftime("%B %d, %Y - %I:%M%p")
-            except Exception:
-                time_str = str(posted_time)
-        else:
-            time_str = str(posted_time)
+    time_str = parse_and_format_time(posted_time)
 
     payload = {
         "username": "Universal Internship Tracker",
@@ -242,19 +279,15 @@ def main():
         except Exception as e:
             print(f"Failed to fetch {source['name']}: {e}")
 
-    # First run check: if seen_ids is completely empty
     first_run = len(seen_ids) == 0
     new_seen_ids = set(seen_ids)
     new_jobs_found = 0
-
-    # Build an in-memory set of fingerprints seen across this specific run
     current_batch_fingerprints = set()
 
     for job in all_scraped_jobs:
         fp = job["fingerprint"]
         raw_id = job["raw_id"]
 
-        # Check if matched against legacy Simplify UUIDs or cross-repo fingerprints
         is_already_seen = (
             (raw_id and raw_id in seen_ids) or 
             (fp in seen_ids) or 
@@ -273,13 +306,11 @@ def main():
                 )
                 new_jobs_found += 1
             
-            # Register for deduplication in both current run and persistent cache
             current_batch_fingerprints.add(fp)
             new_seen_ids.add(fp)
             if raw_id:
                 new_seen_ids.add(raw_id)
         else:
-            # Backfill the fingerprint for Simplify listings that previously only had a UUID
             new_seen_ids.add(fp)
             if raw_id:
                 new_seen_ids.add(raw_id)
