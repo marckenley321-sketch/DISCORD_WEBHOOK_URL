@@ -16,8 +16,8 @@ TARGET_CATEGORIES = {
 }
 
 TARGET_KEYWORDS = [
-    "software", "engineer", "quant", "developer", 
-    "data", "ai", "machine learning", "security", "support", "systems"
+    "software", "engineer", "quant", "developer", "technology",
+    "data", "ai", "machine learning", "security", "support", "systems", "development"
 ]
 
 SOURCES = [
@@ -43,7 +43,7 @@ SOURCES = [
     },
 ]
 
-# ---------------- Normalization & Deduplication ---------------- #
+# Normalization #
 
 COMPANY_SUFFIXES = [
     r"\binc\b", r"\bllc\b", r"\bcorp\b", r"\bcorporation\b", 
@@ -85,7 +85,7 @@ def generate_fingerprint_id(company: str, role: str) -> str:
     raw_key = f"fp:{comp_clean}:{role_clean}"
     return hashlib.md5(raw_key.encode("utf-8")).hexdigest()
 
-# ---------------- Time Parsing ---------------- #
+#Time Parsing #
 
 def parse_and_format_time(posted_time):
     """Converts strings like '2d' or Unix stamps to 'October 25, 2026 - 12:02PM'"""
@@ -101,7 +101,6 @@ def parse_and_format_time(posted_time):
     if isinstance(posted_time, str):
         pt_clean = posted_time.strip().lower()
         
-        # Match markdown relative times (e.g. "2d", "3h", "1w")
         rel_match = re.search(r'(\d+)\s*([hdwy])', pt_clean)
         if rel_match:
             val = int(rel_match.group(1))
@@ -130,10 +129,9 @@ def parse_and_format_time(posted_time):
         except ValueError:
             pass
 
-    # If it is missing or unparseable, fall back to the time it was discovered (now)
     return now.strftime("%B %d, %Y - %I:%M%p").replace(" 0", " ")
 
-# ---------------- Discord Dispatcher ---------------- #
+# Discord Dispatcher #
 
 def send_discord_notification(source, company, role, location, link, posted_time):
     time_str = parse_and_format_time(posted_time)
@@ -164,7 +162,7 @@ def send_discord_notification(source, company, role, location, link, posted_time
         except Exception as e:
             print(f"Failed to post to Discord: {e}")
 
-# ---------------- Parsers ---------------- #
+#Parsers#
 
 def clean_text(text: str) -> str:
     text = re.sub(r"<[^>]+>", "", text)
@@ -248,7 +246,7 @@ def parse_markdown_table(content, source_name):
         })
     return jobs
 
-# ---------------- Main Controller ---------------- #
+#Main Controller#
 
 def main():
     seen_ids = set()
