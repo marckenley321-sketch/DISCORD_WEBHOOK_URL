@@ -2,6 +2,7 @@ import hashlib
 import json
 import os
 import re
+from datetime import datetime
 from difflib import SequenceMatcher
 from urllib.parse import urlparse
 import requests
@@ -15,8 +16,8 @@ TARGET_CATEGORIES = {
 }
 
 TARGET_KEYWORDS = [
-    "software", "engineer", "quant", "developer", "technology", 
-    "data", "ai", "machine learning", "security", "support", "systems", "development"
+    "software", "engineer", "quant", "developer", 
+    "data", "ai", "machine learning", "security", "support", "systems"
 ]
 
 SOURCES = [
@@ -42,7 +43,7 @@ SOURCES = [
     },
 ]
 
-# ----------------  ---------------- #
+# ---------------- Normalization & Deduplication ---------------- #
 
 COMPANY_SUFFIXES = [
     r"\binc\b", r"\bllc\b", r"\bcorp\b", r"\bcorporation\b", 
@@ -85,13 +86,14 @@ def generate_fingerprint_id(company: str, role: str) -> str:
     raw_key = f"fp:{comp_clean}:{role_clean}"
     return hashlib.md5(raw_key.encode("utf-8")).hexdigest()
 
-# ----------------  ---------------- #
+# ---------------- Discord Dispatcher ---------------- #
 
 def send_discord_notification(source, company, role, location, link, posted_time):
     time_str = "Not Listed"
     if posted_time:
         if isinstance(posted_time, (int, float)):
             try:
+                # Converts timestamp to format: "October 25, 2026 - 12:02PM"
                 dt = datetime.fromtimestamp(posted_time)
                 time_str = dt.strftime("%B %d, %Y - %I:%M%p")
             except Exception:
@@ -125,7 +127,7 @@ def send_discord_notification(source, company, role, location, link, posted_time
         except Exception as e:
             print(f"Failed to post to Discord: {e}")
 
-# ----------------  ---------------- #
+# ---------------- Parsers ---------------- #
 
 def clean_text(text: str) -> str:
     text = re.sub(r"<[^>]+>", "", text)
@@ -209,7 +211,7 @@ def parse_markdown_table(content, source_name):
         })
     return jobs
 
-# ----------------  ---------------- #
+# ---------------- Main Controller ---------------- #
 
 def main():
     seen_ids = set()
